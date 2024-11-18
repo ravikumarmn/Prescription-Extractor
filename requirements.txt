@@ -1,0 +1,5 @@
+google-generativeai
+pillow
+streamlit
+langchain_core==0.3.19
+openai==1.54.4
