@@ -4,122 +4,133 @@ from PIL import Image
 import google.generativeai as genai
 import asyncio
 from langchain_core.output_parsers import JsonOutputParser
+from streamlit_drawable_canvas import st_canvas
+import numpy as np
+import cv2
+import base64
 
 
-prompt_template_extract_ocr = """
-You are tasked with extracting all textual information from the provided image accurately, even if the image is blurry or contains glare. Extract both plain text and structured tabular information.
+@st.cache_data
+def get_prompt_template_extract_ocr():
+    prompt_template_extract_ocr = """
+    You are tasked with extracting all textual information from the provided image accurately, even if the image is blurry or contains glare. Extract both plain text and structured tabular information.
 
-### Guidelines for Extraction:
+    ### Guidelines for Extraction:
 
-1. **General Text Extraction**:
-   - Extract all visible text, including titles, headers, annotations, and any other written content.
-   - Preserve:
-     - The original case (upper/lowercase letters).
-     - All punctuation marks and formatting.
-   - Ensure all extracted text is direct and accurate—no interpretations or omissions.
+    1. **General Text Extraction**:
+    - Extract all visible text, including titles, headers, annotations, and any other written content.
+    - Preserve:
+        - The original case (upper/lowercase letters).
+        - All punctuation marks and formatting.
+    - Ensure all extracted text is direct and accurate—no interpretations or omissions.
 
-2. **Table and Structured Content Extraction**:
-   - Identify structured tabular data, prescriptions, or organized lists within the image.
-   - Represent these in Markdown format using `|` for columns and `-` for headers.
-   - Maintain the integrity of the content: include all rows, columns, and line breaks using `<br>` tags if needed.
+    2. **Table and Structured Content Extraction**:
+    - Identify structured tabular data, prescriptions, or organized lists within the image.
+    - Represent these in Markdown format using `|` for columns and `-` for headers.
+    - Maintain the integrity of the content: include all rows, columns, and line breaks using `<br>` tags if needed.
 
-3. **Content Organization**:
-   - Deliver extracted text in Markdown format.
-   - Maintain a logical flow, similar to how the content is presented in the image.
-   - Do not interpret or restructure the text beyond what is explicitly visible.
+    3. **Content Organization**:
+    - Deliver extracted text in Markdown format.
+    - Maintain a logical flow, similar to how the content is presented in the image.
+    - Do not interpret or restructure the text beyond what is explicitly visible.
 
-### Specific Requirements:
-- Extract the following details in their entirety if visible:
-  - Patient Information, including name, age, gender, date, height, weight, BMI, SPO2, HR, B.P, TEM.
-  - Hospital Information, including hospital name, location, doctor details (name, specialization, license number, and contact).
-  - Medication Information, including medicine name, dosage, form (e.g., tablet, liquid), and quantity (e.g., sheets, bottles).
-  - Doctor's notes or any other remarks.
+    ### Specific Requirements:
+    - Extract the following details in their entirety if visible:
+    - Patient Information, including name, age, gender, date, height, weight, BMI, SPO2, HR, B.P, TEM.
+    - Hospital Information, including hospital name, location, doctor details (name, specialization, license number, and contact).
+    - Medication Information, including medicine name, dosage, form (e.g., tablet, liquid), and quantity (e.g., sheets, bottles).
+    - Doctor's notes or any other remarks.
 
-### Output Format:
-- Present all extracted data in Markdown format without rephrasing.
-- Ensure completeness and high fidelity of the output by avoiding omission or assumption.
-- Avoid unnecessary annotations or commentary, providing the content in a raw form.
+    ### Output Format:
+    - Present all extracted data in Markdown format without rephrasing.
+    - Ensure completeness and high fidelity of the output by avoiding omission or assumption.
+    - Avoid unnecessary annotations or commentary, providing the content in a raw form.
 
-Your primary goal is to accurately represent all the textual content from the image in a clear and structured Markdown format.
+    Your primary goal is to accurately represent all the textual content from the image in a clear and structured Markdown format.
 
-"""
+    """
+    return prompt_template_extract_ocr
 
-prompt_template_extract_structured_data = """
-I have the following raw OCR-extracted text from a medical prescription. Your task is to transform this raw text into a structured JSON format as specified below.
 
-**Requirements:**
+@st.cache_data
+def get_prompt_template_extract_structured_data():
+    prompt_template_extract_structured_data = """
+    I have the following raw OCR-extracted text from a medical prescription. Your task is to transform this raw text into a structured JSON format as specified below.
 
-1. **Patient Information**:
-   - Extract the following details:
-     - **Name**: The patient's full name.
-     - **Age**: Patient's age.
-     - **Gender**: Patient's gender.
-     - **Date**: Date of the prescription.
-     - **Height, Weight, BMI, SPO2, HR, B.P, TEM**: Extract these metrics if available.
+    **Requirements:**
 
-2. **Doctor Information**:
-   - **Name**: The name of the doctor.
-   - **Graduation**: Doctor's qualifications (e.g., MD, DM Cardiology).
-   - **Hospital Name**: The name of the hospital or clinic.
-   - **Location**: Address or contact information of the hospital.
-   - **License Number**: The doctor's license/registration number.
+    1. **Patient Information**:
+    - Extract the following details:
+        - **Name**: The patient's full name.
+        - **Age**: Patient's age.
+        - **Gender**: Patient's gender.
+        - **Date**: Date of the prescription.
+        - **Height, Weight, BMI, SPO2, HR, B.P, TEM**: Extract these metrics if available.
 
-3. **Medication Information**:
-   - Extract the list of medicines prescribed. For each medicine, include:
-     - **Medicine Name**: The name of the medicine.
-     - **Dosage**: The prescribed dosage (e.g., 100 mg, 5 ml).
-     - **Form**: Type of medicine (e.g., tablet, liquid).
-     - **Quantity**: Amount prescribed (e.g., sheets, bottles).
+    2. **Doctor Information**:
+    - **Name**: The name of the doctor.
+    - **Graduation**: Doctor's qualifications (e.g., MD, DM Cardiology).
+    - **Hospital Name**: The name of the hospital or clinic.
+    - **Location**: Address or contact information of the hospital.
+    - **License Number**: The doctor's license/registration number.
 
-4. **Symptoms**:
-   - Extract the list of symptoms or reasons for prescription mentioned by the doctor (e.g., hypothyroidism, neuropathy).
+    3. **Medication Information**:
+    - Extract the list of medicines prescribed. For each medicine, include:
+        - **Medicine Name**: The name of the medicine.
+        - **Dosage**: The prescribed dosage (e.g., 100 mg, 5 ml).
+        - **Form**: Type of medicine (e.g., tablet, liquid).
+        - **Quantity**: Amount prescribed (e.g., sheets, bottles).
 
-5. **Doctor's Note**:
-   - Include any additional remarks or notes provided by the doctor.
+    4. **Symptoms**:
+    - Extract the list of symptoms or reasons for prescription mentioned by the doctor (e.g., hypothyroidism, neuropathy).
 
-**Output Format**:
-```json
-{
-  "Patient Information": {
-    "Name": "",
-    "Age": "",
-    "Gender": "",
-    "Date": "",
-    "Height": "",
-    "Weight": "",
-    "BMI": "",
-    "SPO2": "",
-    "HR": "",
-    "B.P": "",
-    "TEM": ""
-  },
-  "Doctor Information": {
-    "Name": "",
-    "Graduation": "",
-    "Hospital Name": "",
-    "Location": "",
-    "License Number": ""
-  },
-  "Medication Information": [
+    5. **Doctor's Note**:
+    - Include any additional remarks or notes provided by the doctor.
+
+    **Output Format**:
+    ```json
     {
-      "Medicine Name": "",
-      "Dosage": "",
-      "Form": "",
-      "Quantity": ""
+    "Patient Information": {
+        "Name": "",
+        "Age": "",
+        "Gender": "",
+        "Date": "",
+        "Height": "",
+        "Weight": "",
+        "BMI": "",
+        "SPO2": "",
+        "HR": "",
+        "B.P": "",
+        "TEM": ""
+    },
+    "Doctor Information": {
+        "Name": "",
+        "Graduation": "",
+        "Hospital Name": "",
+        "Location": "",
+        "License Number": ""
+    },
+    "Medication Information": [
+        {
+        "Medicine Name": "",
+        "Dosage": "",
+        "Form": "",
+        "Quantity": ""
+        }
+    ],
+    "Symptoms": [],
+    "Doctor Note": ""
     }
-  ],
-  "Symptoms": [],
-  "Doctor Note": ""
-}
 
-Raw OCR Text:
-{{raw_ocr_text}}
+    Raw OCR Text:
+    {{raw_ocr_text}}
 
-**Instructions**:
-- Extract and populate each field based on the raw text.
-- Maintain the original wording and data accuracy; avoid interpretations.
-- If a detail is missing or unclear, leave the field empty or use "Not Available."
-"""
+    **Instructions**:
+    - Extract and populate each field based on the raw text.
+    - Maintain the original wording and data accuracy; avoid interpretations.
+    - If a detail is missing or unclear, leave the field empty or use "Not Available."
+    """
+    return prompt_template_extract_structured_data
 
 
 per_million_usd = {
@@ -156,8 +167,14 @@ def calculate_cost(
 
 st.title("Medical Prescription Text Extraction")
 
-uploaded_file = st.file_uploader(
-    "Choose an image of a medical prescription", type=["jpeg", "jpg", "png"]
+canvas_result = st_canvas(
+    stroke_width=2,
+    stroke_color="#000000",
+    background_color="#eee",
+    height=400,
+    width=600,
+    drawing_mode="freedraw",
+    key="canvas"
 )
 
 
@@ -177,11 +194,11 @@ async def process_image_ocr(image, prompt: str) -> dict:
     }
 
 
-async def process_structured_data(ocr_text: str) -> dict:
+async def process_structured_data(ocr_text: str, prompt: str) -> dict:
     model = genai.GenerativeModel(model_name="gemini-1.5-flash-001")
     start_time = time.time()
     result = model.generate_content(
-        contents=[prompt_template_extract_structured_data.replace(
+        contents=[prompt.replace(
             "{{raw_ocr_text}}", ocr_text)]
     )
     end_time = time.time()
@@ -191,45 +208,53 @@ async def process_structured_data(ocr_text: str) -> dict:
         "metadata": result.usage_metadata
     }
 
-if uploaded_file is not None:
-    uploaded_image_PIL = Image.open(uploaded_file)
+if st.button("Submit"):
+    prompt_template_extract_ocr = get_prompt_template_extract_ocr()
+    prompt_template_extract_structured_data = get_prompt_template_extract_structured_data()
+    if canvas_result.image_data is not None:
+        # Convert canvas data to PIL Image
+        img = canvas_result.image_data
+        img = np.array(img, dtype=np.uint8)
+        img = cv2.cvtColor(img, cv2.COLOR_RGBA2RGB)
+        pil_image = Image.fromarray(img)
 
-    st.sidebar.image(uploaded_image_PIL, caption="Uploaded Prescription")
+        st.sidebar.image(pil_image, caption="Prescription")
+#     st.sidebar.image(uploaded_image_PIL, caption="Uploaded Prescription")
 
-    with st.spinner("Extracting..."):
-        async def run_processing():
-            ocr_result = await process_image_ocr(uploaded_image_PIL, prompt_template_extract_ocr)
-            structured_result = await process_structured_data(ocr_result["response"])
+        with st.spinner("Extracting..."):
+            async def run_processing():
+                ocr_result = await process_image_ocr(pil_image, prompt_template_extract_ocr)
+                structured_result = await process_structured_data(ocr_result["response"], prompt_template_extract_structured_data)
 
-            total_time = ocr_result["time_taken"] + \
-                structured_result["time_taken"]
+                total_time = ocr_result["time_taken"] + \
+                    structured_result["time_taken"]
 
-            ocr_cost = calculate_cost(
-                ocr_result["metadata"].prompt_token_count, ocr_result["metadata"].candidates_token_count)
-            structured_cost = calculate_cost(
-                structured_result["metadata"].prompt_token_count, structured_result["metadata"].candidates_token_count)
+                ocr_cost = calculate_cost(
+                    ocr_result["metadata"].prompt_token_count, ocr_result["metadata"].candidates_token_count)
+                structured_cost = calculate_cost(
+                    structured_result["metadata"].prompt_token_count, structured_result["metadata"].candidates_token_count)
 
-            st.json({
-                "time": {
-                    "ocr_time_taken": ocr_result["time_taken"],
-                    "format_time_taken": structured_result["time_taken"],
-                    "total_time_taken": total_time
-                },
-                "cost": {
-                    "ocr_cost": ocr_cost,
-                    "structured_cost": structured_cost,
-                    "total_cost": ocr_cost + structured_cost
-                }
-            })
-            parser = JsonOutputParser()
-            result = parser.parse(structured_result["response"])
-            st.json(result)
+                st.json({
+                    "time": {
+                        "ocr_time_taken": ocr_result["time_taken"],
+                        "format_time_taken": structured_result["time_taken"],
+                        "total_time_taken": total_time
+                    },
+                    "cost": {
+                        "ocr_cost": ocr_cost,
+                        "structured_cost": structured_cost,
+                        "total_cost": ocr_cost + structured_cost
+                    }
+                })
+                parser = JsonOutputParser()
+                result = parser.parse(structured_result["response"])
+                st.json(result)
 
-        # Create and run event loop
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            loop.run_until_complete(run_processing())
-            st.success("Done!")
-        finally:
-            loop.close()
+            # Create and run event loop
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(run_processing())
+                st.success("Done!")
+            finally:
+                loop.close()
