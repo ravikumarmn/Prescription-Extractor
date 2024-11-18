@@ -8,14 +8,18 @@ from langchain_core.output_parsers import JsonOutputParser
 from src.utils import calculate_cost
 
 
+st.secrets["GEMINI_API_KEY"]
+st.set_page_config(layout="wide")
+
 st.title("Medical Prescription Text Extraction")
 
 uploaded_file = st.file_uploader(
     "Choose an image of a medical prescription", type=["jpeg", "jpg", "png"]
 )
 
-
+@st.cache_data
 async def process_image_ocr(image, prompt: str) -> dict:
+    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
     model = genai.GenerativeModel(model_name="gemini-1.5-flash-002")
     ocr_start_time = time.time()
     result = model.generate_content(
@@ -30,6 +34,7 @@ async def process_image_ocr(image, prompt: str) -> dict:
     }
 
 
+@st.cache_data
 async def process_structured_data(ocr_text: str) -> dict:
     model = genai.GenerativeModel(model_name="gemini-1.5-flash-001")
     start_time = time.time()
@@ -46,10 +51,10 @@ async def process_structured_data(ocr_text: str) -> dict:
 
 if uploaded_file is not None:
     uploaded_image_PIL = Image.open(uploaded_file)
-    
+
     st.sidebar.image(uploaded_image_PIL, caption="Uploaded Prescription")
 
-    with st.spinner("Processing..."):
+    with st.spinner("Extracting..."):
         async def run_processing():
             ocr_result = await process_image_ocr(uploaded_image_PIL, prompt_template_extract_ocr)
             structured_result = await process_structured_data(ocr_result["response"])
