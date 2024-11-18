@@ -210,12 +210,16 @@ if uploaded_file is not None:
                 structured_result["metadata"].prompt_token_count, structured_result["metadata"].candidates_token_count)
 
             st.json({
-                "ocr_time_taken": ocr_result["time_taken"],
-                "format_time_taken": structured_result["time_taken"],
-                "total_time_taken": total_time,
-                "ocr_cost": ocr_cost,
-                "structured_cost": structured_cost,
-                "total_cost": ocr_cost + structured_cost
+                "time": {
+                    "ocr_time_taken": ocr_result["time_taken"],
+                    "format_time_taken": structured_result["time_taken"],
+                    "total_time_taken": total_time
+                },
+                "cost": {
+                    "ocr_cost": ocr_cost,
+                    "structured_cost": structured_cost,
+                    "total_cost": ocr_cost + structured_cost
+                }
             })
             parser = JsonOutputParser()
             result = parser.parse(structured_result["response"])
