@@ -153,6 +153,7 @@ def calculate_cost(
     total_cost = input_cost + output_cost
     return total_cost
 
+
 st.title("Medical Prescription Text Extraction")
 
 uploaded_file = st.file_uploader(
@@ -176,7 +177,6 @@ async def process_image_ocr(image, prompt: str) -> dict:
     }
 
 
-@st.cache_data
 async def process_structured_data(ocr_text: str) -> dict:
     model = genai.GenerativeModel(model_name="gemini-1.5-flash-001")
     start_time = time.time()
