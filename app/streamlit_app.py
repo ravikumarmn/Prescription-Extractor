@@ -2,14 +2,13 @@ import time
 import streamlit as st
 from PIL import Image
 import google.generativeai as genai
-from src.prompts.prompts import prompt_template_extract_ocr, prompt_template_extract_structured_datas
+from src.prompts.prompts import prompt_template_extract_ocr, prompt_template_extract_structured_data
 import asyncio
 from langchain_core.output_parsers import JsonOutputParser
 from src.utils import calculate_cost
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+
+st.secrets["GEMINI_API_KEY"]
 st.set_page_config(layout="wide")
 
 st.title("Medical Prescription Text Extraction")
@@ -18,6 +17,7 @@ uploaded_file = st.file_uploader(
     "Choose an image of a medical prescription", type=["jpeg", "jpg", "png"]
 )
 
+@st.cache_data
 async def process_image_ocr(image, prompt: str) -> dict:
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
     model = genai.GenerativeModel(model_name="gemini-1.5-flash-002")
@@ -34,6 +34,7 @@ async def process_image_ocr(image, prompt: str) -> dict:
     }
 
 
+@st.cache_data
 async def process_structured_data(ocr_text: str) -> dict:
     model = genai.GenerativeModel(model_name="gemini-1.5-flash-001")
     start_time = time.time()
