@@ -153,10 +153,6 @@ def calculate_cost(
     total_cost = input_cost + output_cost
     return total_cost
 
-
-st.secrets["GEMINI_API_KEY"]
-st.set_page_config(layout="wide")
-
 st.title("Medical Prescription Text Extraction")
 
 uploaded_file = st.file_uploader(
