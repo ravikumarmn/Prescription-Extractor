@@ -160,7 +160,6 @@ uploaded_file = st.file_uploader(
 )
 
 
-@st.cache_data
 async def process_image_ocr(image, prompt: str) -> dict:
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
     model = genai.GenerativeModel(model_name="gemini-1.5-flash-002")
