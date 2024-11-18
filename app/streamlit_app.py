@@ -7,7 +7,6 @@ from langchain_core.output_parsers import JsonOutputParser
 from streamlit_drawable_canvas import st_canvas
 import numpy as np
 import cv2
-import base64
 
 
 @st.cache_data
