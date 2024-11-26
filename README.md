@@ -75,11 +75,14 @@ An AI-powered application that extracts and structures medical prescription info
 
 
 # API  
-# Health check
-```curl http://localhost:8000/health```
 
-# Process prescription image
-```curl -X POST -F "image=@/path/to/prescription.jpg" http://localhost:8000/process```
+* `http://localhost:8000/api/health`
+    *   Just to very the endopoint is working.
+    *   It returns a 200 status code.
+    
+* `http://localhost:8000/api/process`
+    *   This is the main endpoint for processing the image.
+    *   It accepts a POST request with the image file as the payload.
 
 ## Usage
 
