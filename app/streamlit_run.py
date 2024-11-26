@@ -271,76 +271,82 @@ async def process_prescription(image: Image.Image, ocr_prompt: str, structured_p
 
 def main():
     """Main application function."""
-    st.title("Medical Prescription Text Extraction")
-    st.write("Write your prescription in the canvas below")
+    st.set_page_config(layout="wide", initial_sidebar_state="collapsed")
     
-    canvas_config = CONFIG["ui"]["canvas"]
-    canvas_result = st_canvas(
-        stroke_width=canvas_config["stroke_width"],
-        stroke_color=canvas_config["stroke_color"],
-        background_color=canvas_config["background_color"],
-        height=canvas_config["height"],
-        width=canvas_config["width"],
-        drawing_mode="freedraw",
-        key="canvas",
-    )
+    # Create three columns with the middle one being wider
+    left_col, center_col, right_col = st.columns([1, 2, 1])
+    
+    with center_col:
+        st.title("Medical Prescription Text Extraction")
+        st.write("Write your prescription in the canvas below")
+        
+        canvas_config = CONFIG["ui"]["canvas"]
+        canvas_result = st_canvas(
+            stroke_width=canvas_config["stroke_width"],
+            stroke_color=canvas_config["stroke_color"],
+            background_color=canvas_config["background_color"],
+            height=canvas_config["height"],
+            width=canvas_config["width"],
+            drawing_mode="freedraw",
+            key="canvas",
+        )
 
-    if canvas_result.image_data is not None and st.button("Extract Text"):
-        try:
-            with st.spinner("Processing..."):
-                image = Image.fromarray(canvas_result.image_data.astype('uint8'))
-                processed_image = preprocess_image(image)
-                
-                results = asyncio.run(process_prescription(
-                    processed_image,
-                    get_prompt_template_extract_ocr(),
-                    get_prompt_template_extract_structured_data()
-                ))
-                
-                if not results["success"]:
-                    return
-                
-                if results["structured_result"]["data"]:
-                    st.subheader("Structured Information")
-                    st.json(results["structured_result"]["data"])
-                else:
-                    st.warning("Could not extract structured information from the text")
-                
-                # Calculate costs with improved token counting
-                ocr_cost = calculate_cost(
-                    results["ocr_result"]["prompt_tokens"],
-                    results["ocr_result"]["completion_tokens"]
-                )
-                
-                structured_cost = calculate_cost(
-                    results["structured_result"]["prompt_tokens"],
-                    results["structured_result"]["completion_tokens"]
-                )
-                
-                total_time = round(
-                    results["ocr_result"]["time_taken"] + 
-                    results["structured_result"]["time_taken"],
-                    3
-                )
-                
-                metadata = {
-                    "Processing Time": {
-                        "OCR": f"{results['ocr_result']['time_taken']:.3f}s",
-                        "Formatting": f"{results['structured_result']['time_taken']:.3f}s",
-                        "Total": f"{total_time:.3f}s"
-                    },
-                    "Cost Information": {
-                        "OCR": f"${ocr_cost:.6f}",
-                        "Formatting": f"${structured_cost:.6f}",
-                        "Total": f"${(ocr_cost + structured_cost):.6f}"
+        if canvas_result.image_data is not None and st.button("Extract Text"):
+            try:
+                with st.spinner("Processing..."):
+                    image = Image.fromarray(canvas_result.image_data.astype('uint8'))
+                    processed_image = preprocess_image(image)
+                    
+                    results = asyncio.run(process_prescription(
+                        processed_image,
+                        get_prompt_template_extract_ocr(),
+                        get_prompt_template_extract_structured_data()
+                    ))
+                    
+                    if not results["success"]:
+                        return
+                    
+                    if results["structured_result"]["data"]:
+                        st.subheader("Structured Information")
+                        st.json(results["structured_result"]["data"])
+                    else:
+                        st.warning("Could not extract structured information from the text")
+                    
+                    # Calculate costs with improved token counting
+                    ocr_cost = calculate_cost(
+                        results["ocr_result"]["prompt_tokens"],
+                        results["ocr_result"]["completion_tokens"]
+                    )
+                    
+                    structured_cost = calculate_cost(
+                        results["structured_result"]["prompt_tokens"],
+                        results["structured_result"]["completion_tokens"]
+                    )
+                    
+                    total_time = round(
+                        results["ocr_result"]["time_taken"] + 
+                        results["structured_result"]["time_taken"],
+                        3
+                    )
+                    
+                    metadata = {
+                        "Processing Time": {
+                            "OCR": f"{results['ocr_result']['time_taken']:.3f}s",
+                            "Formatting": f"{results['structured_result']['time_taken']:.3f}s",
+                            "Total": f"{total_time:.3f}s"
+                        },
+                        "Cost Information": {
+                            "OCR": f"${ocr_cost:.6f}",
+                            "Formatting": f"${structured_cost:.6f}",
+                            "Total": f"${(ocr_cost + structured_cost):.6f}"
+                        }
                     }
-                }
-                
-                st.subheader("Metadata")
-                st.json(metadata)
-                
-        except Exception as e:
-            st.error(f"An error occurred: {str(e)}")
+                    
+                    st.subheader("Metadata")
+                    st.json(metadata)
+                    
+            except Exception as e:
+                st.error(f"An error occurred: {str(e)}")
 
 if __name__ == "__main__":
     main()

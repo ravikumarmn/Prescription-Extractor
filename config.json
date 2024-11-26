@@ -19,8 +19,8 @@
     },
     "ui": {
         "canvas": {
-            "width": 600,
-            "height": 400,
+            "width": 1200,
+            "height": 800,
             "stroke_width": 2,
             "stroke_color": "#000000",
             "background_color": "#ffffff"
